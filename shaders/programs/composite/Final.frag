@@ -71,10 +71,17 @@ vec3 FidelityFX_RCAS(sampler2D colortex, vec2 coord, vec3 colorE, vec2 pixelSize
     //  d e f
     //    h
     // Input and output might not be same size in Optifine, so we should use textureLod()
+    #ifdef HDR_ENABLED
+    vec3 colorB = textureLod(colortex, coord + vec2( 0.0, -1.0) * pixelSize, 0.0).rgb / HdrGamePeakBrightness;
+	vec3 colorD = textureLod(colortex, coord + vec2(-1.0,  0.0) * pixelSize, 0.0).rgb / HdrGamePeakBrightness;
+	vec3 colorF = textureLod(colortex, coord + vec2( 1.0,  0.0) * pixelSize, 0.0).rgb / HdrGamePeakBrightness;
+	vec3 colorH = textureLod(colortex, coord + vec2( 0.0,  1.0) * pixelSize, 0.0).rgb / HdrGamePeakBrightness;
+    #else
 	vec3 colorB = textureLod(colortex, coord + vec2( 0.0, -1.0) * pixelSize, 0.0).rgb;
 	vec3 colorD = textureLod(colortex, coord + vec2(-1.0,  0.0) * pixelSize, 0.0).rgb;
 	vec3 colorF = textureLod(colortex, coord + vec2( 1.0,  0.0) * pixelSize, 0.0).rgb;
 	vec3 colorH = textureLod(colortex, coord + vec2( 0.0,  1.0) * pixelSize, 0.0).rgb;
+    #endif
     // Luma times 2.
     float lumaB = luma2(colorB);
     float lumaD = luma2(colorD);
@@ -119,7 +126,7 @@ void main() {
     #ifdef FINAL_SHARPENING
         vec2 pixelSize = 1.0 / vec2(textureSize(colortex0, 0));
         #ifdef HDR_ENABLED
-            color = linearToSRGBSafe(pow(FidelityFX_RCAS(colortex0 / HdrGamePeakBrightness, texcoord, color, pixelSize) * HdrGamePeakBrightness, vec3(1.0 / GAMMA)) * HdrGamePaperWhiteBrightness / HdrUIBrightness);
+            color = linearToSRGBSafe(FidelityFX_RCAS(colortex0, texcoord, color / HdrGamePeakBrightness, pixelSize) * HdrGamePeakBrightness * HdrGamePaperWhiteBrightness / HdrUIBrightness);
         #else
             color = FidelityFX_RCAS(colortex0, texcoord, color, pixelSize);
         #endif
