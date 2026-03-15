@@ -59,6 +59,12 @@ float max3(float a, float b, float c) {
     return max(max(a, b), c);
 }
 
+vec3 linearToSRGBSafe(in vec3 color) {
+    vec3 color_sign = sign(color);
+    vec3 color_abs = abs(color);
+	return mix(color_abs * 12.92, 1.055 * pow(color_abs, vec3(0.41666666)) - 0.055, step(vec3(0.0031308), color_abs)) * color_sign;
+}
+
 vec3 FidelityFX_RCAS(sampler2D colortex, vec2 coord, vec3 colorE, vec2 pixelSize) {
     // Algorithm uses minimal 3x3 pixel neighborhood.
     //    b
@@ -112,7 +118,11 @@ void main() {
     vec3 color = textureLod(colortex0, texcoord, 0.0).rgb;
     #ifdef FINAL_SHARPENING
         vec2 pixelSize = 1.0 / vec2(textureSize(colortex0, 0));
-        color = FidelityFX_RCAS(colortex0, texcoord, color, pixelSize);
+        #ifdef HDR_ENABLED
+            color = linearToSRGBSafe(pow(FidelityFX_RCAS(colortex0 / HdrGamePeakBrightness, texcoord, color, pixelSize) * HdrGamePeakBrightness, vec3(1.0 / GAMMA)) * HdrGamePaperWhiteBrightness / HdrUIBrightness);
+        #else
+            color = FidelityFX_RCAS(colortex0, texcoord, color, pixelSize);
+        #endif
     #endif
     fragColor = vec4(color, 1.0);
 }
