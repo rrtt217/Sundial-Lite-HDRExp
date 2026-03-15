@@ -96,6 +96,13 @@ uniform mat4 gbufferPreviousProjection;
     uniform int vxRenderDistance;
 #endif
 
+#if defined(HDR_MOD_INSTALLED) && defined(HDR_ENABLED)
+    uniform float HdrGamePeakBrightness;
+    uniform float HdrGamePaperWhiteBrightness;
+    uniform float HdrGameMinimumBrightness;
+    uniform float HdrUIBrightness;
+#endif
+
 const float PI = 3.1415926535897;
 #if SR_ENABLE
     vec2 renderScale = floor(SR_RENDER_SCALE_FACTOR * screenSize) * texelSize;

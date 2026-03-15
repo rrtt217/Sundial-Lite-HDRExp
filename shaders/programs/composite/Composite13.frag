@@ -22,7 +22,7 @@ layout(location = 0) out vec4 texBuffer4;
 #include "/libs/Uniform.glsl"
 
 /*
-const int colortex0Format = RGBA8;
+const int colortex0Format = RGBA16F;
 const int colortex1Format = RGBA16;
 const int colortex2Format = RGBA16;
 const int colortex3Format = RGBA16F;

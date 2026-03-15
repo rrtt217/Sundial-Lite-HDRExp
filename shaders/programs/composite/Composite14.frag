@@ -27,7 +27,7 @@ in vec2 texcoord;
 // Vignette
     #define VIGNETTE_STRENGTH 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 2.2 2.4 2.6 2.8 3.0 3.2 3.4 3.6 3.8 4.0 4.2 4.4 4.6 4.8 5.0 5.5 6.0 6.5 7.0 7.5 8.0 9.5 10.0 11.0 12.0 13.0 14.0 15.0 16.0 17.0 18.0 19.0 20.0]
 // Tonemap
-    #define TONEMAPPING uchimura // [uchimura ACES AgX GT7]
+    #define TONEMAPPING uchimura // [uchimura AgX_AllenWp ACES AgX GT7]
     #define GAMMA 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 2.2 2.4 2.6 2.8 3.0 3.2 3.4 3.6 3.8 4.0 4.2 4.4 4.6 4.8 5.0 5.5 6.0 6.5 7.0 7.5 8.0 9.5 10.0]
     #define SATURATION 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
     #define COLOR_TEMPERATURE 6500.0 // [1000.0 1200.0 1400.0 1600.0 1800.0 2000.0 2200.0 2400.0 2600.0 2800.0 3000.0 3200.0 3400.0 3600.0 3800.0 4000.0 4250.0 4500.0 4750.0 5000.0 5250.0 5500.0 5750.0 6000.0 6250.0 6500.0 6750.0 7000.0 7250.0 7500.0 7750.0 8000.0 8500.0 9000.0 9500.0 10000.0 10500.0 11000.0 11500.0 12000.0 13000.0 14000.0 15000.0 16000.0 18000.0 20000.0 22000.0 24000.0 28000.0 32000.0 36000.0 40000.0]
@@ -150,12 +150,16 @@ vec3 uchimura(vec3 x, float P, float a, float m, float l, float c, float b) {
     vec3 w1 = vec3(1.0 - w0 - w2);
     vec3 T = vec3(pow(x, vec3(c)) / pow(m, c - 1.0) + b);
     vec3 S = vec3(P - (P - S1) / exp2(CP * S0) * exp2(CP * x));
-    vec3 L = vec3(m - a * m + a * x);
+    vec3 L = vec3(m + a * (x - m));
     return T * w0 + L * w1 + S * w2;
 }
 
 vec3 uchimura(vec3 x) {
-    const float P = 1.0;  // max display brightness
+    #ifdef HDR_ENABLED
+        float P = HdrGamePeakBrightness / HdrGamePaperWhiteBrightness;  // max display brightness
+    #else
+        const float P = 1.0;  // max display brightness
+    #endif
     const float a = CONTRAST;  // contrast
     const float m = 0.22; // linear section start
     const float l = 0.4;  // linear section length
@@ -164,7 +168,11 @@ vec3 uchimura(vec3 x) {
 
     vec3 color = uchimura(x, P, a, m, l, c, b);
 
-    return pow(color, vec3(1.0 / (2.2 * GAMMA)));
+    #ifdef HDR_ENABLED
+        return color;
+    #else
+        return pow(color, vec3(1.0 / (2.2 * GAMMA)));
+    #endif
 }
 
 // AgX from https://www.shadertoy.com/view/cd3XWr
@@ -412,6 +420,101 @@ vec3 GT7(vec3 color) {
 
     color = Rec2020_2_sRGB * color;
     color = pow(color, vec3(1.0 / (2.2 * GAMMA)));
+
+// allenwp tonemapping curve; developed for use in the Godot game engine.
+// Source and details: https://allenwp.com/blog/2025/05/29/allenwp-tonemapping-curve/
+// Input must be a non-negative linear scene value.
+vec3 allenwp_curve(vec3 x) {
+    #ifdef HDR_ENABLED
+        float output_max_value = HdrGamePeakBrightness / HdrGamePaperWhiteBrightness;
+    #else
+        float output_max_value = 1.0;
+    #endif
+	// These constants must match the those in the C++ code that calculates the parameters.
+	// 18% "middle gray" is perceptually 50% of the brightness of reference white.
+	const float awp_crossover_point = 0.1841865;
+	float awp_shoulder_max = output_max_value - awp_crossover_point;
+    float awp_high_clip = 12.0;
+    awp_high_clip = max(awp_high_clip, output_max_value);
+	float awp_contrast = 1.5;
+	float awp_toe_a = ((1.0 / awp_crossover_point) - 1.0) * pow(awp_crossover_point, awp_contrast);
+    float awp_slope_denom = pow(awp_crossover_point, awp_contrast) + awp_toe_a;
+	float awp_slope = (awp_contrast * pow(awp_crossover_point, awp_contrast - 1.0) * awp_toe_a) / (awp_slope_denom * awp_slope_denom);
+	float awp_w = awp_high_clip - awp_crossover_point;
+	awp_w = awp_w * awp_w;
+	awp_w = awp_w / awp_shoulder_max;
+	awp_w = awp_w * awp_slope;
+
+	// Reinhard-like shoulder:
+	vec3 s = x - awp_crossover_point;
+	vec3 slope_s = awp_slope * s;
+	s = slope_s * (1.0 + s / awp_w) / (1.0 + (slope_s / awp_shoulder_max));
+	s += awp_crossover_point;
+
+	// Sigmoid power function toe:
+	vec3 t = pow(x, vec3(awp_contrast));
+	t = t / (t + awp_toe_a);
+
+	return mix(s, t, lessThan(x, vec3(awp_crossover_point)));
+}
+
+// This is an approximation and simplification of EaryChow's AgX implementation that is used by Blender.
+// This code is based off of the script that generates the AgX_Base_sRGB.cube LUT that Blender uses.
+// Source: https://github.com/EaryChow/AgX_LUT_Gen/blob/main/AgXBasesRGB.py
+// Colorspace transformation source: https://www.colour-science.org:8010/apps/rgb_colourspace_transformation_matrix
+vec3 AgX_Allenwp(vec3 color) {
+	// Input color should be non-negative!
+	// Large negative values in one channel and large positive values in other
+	// channels can result in a colour that appears darker and more saturated than
+	// desired after passing it through the inset matrix. For this reason, it is
+	// best to prevent negative input values.
+	// This is done before the Rec. 2020 transform to allow the Rec. 2020
+	// transform to be combined with the AgX inset matrix. This results in a loss
+	// of color information that could be correctly interpreted within the
+	// Rec. 2020 color space as positive RGB values, but is often not worth
+	// the performance cost of an additional matrix multiplication.
+	//
+	// Additionally, this AgX configuration was created subjectively based on
+	// output appearance in the Rec. 709 color gamut, so it is possible that these
+	// matrices will not perform well with non-Rec. 709 output (more testing with
+	// future wide-gamut displays is be needed).
+	// See this comment from the author on the decisions made to create the matrices:
+	// https://github.com/godotengine/godot-proposals/issues/12317#issuecomment-2835824250
+
+	// Combined Rec. 709 to Rec. 2020 and Blender AgX inset matrices:
+	const mat3 rec709_to_rec2020_agx_inset_matrix = mat3(
+			0.544814746488245, 0.140416948464053, 0.0888104196149096,
+			0.373787398372697, 0.754137554567394, 0.178871756420858,
+			0.0813978551390581, 0.105445496968552, 0.732317823964232);
+
+	// Combined inverse AgX outset matrix and Rec. 2020 to Rec. 709 matrices.
+	const mat3 agx_outset_rec2020_to_rec709_matrix = mat3(
+			1.96488741169489, -0.299313364904742, -0.164352742528393,
+			-0.855988495690215, 1.32639796461980, -0.238183969428088,
+			-0.108898916004672, -0.0270845997150571, 1.40253671195648);
+    #ifdef HDR_ENABLED
+	    float output_max_value = HdrGamePeakBrightness / HdrGamePaperWhiteBrightness;
+    #else
+        float output_max_value = 1.0;
+    #endif
+
+    // Apply inset matrix.
+	color = rec709_to_rec2020_agx_inset_matrix * color;
+
+	// Use the allenwp tonemapping curve to match the Blender AgX curve while
+	// providing stability across all variable dyanimc range (SDR, HDR, EDR).
+	color = allenwp_curve(color);
+
+	// Clipping to output_max_value is required to address a cyan colour that occurs
+	// with very bright inputs.
+	color = min(vec3(output_max_value), color);
+
+	// Apply outset to make the result more chroma-laden and then go back to Rec. 709.
+	color = agx_outset_rec2020_to_rec709_matrix * color;
+
+	// Blender's lusRGB.compensate_low_side is too complex for this shader, so
+	// simply return the color, even if it has negative components. These negative
+	// components may be useful for subsequent color adjustments.
     return color;
 }
 
@@ -469,9 +572,14 @@ void main() {
 
     finalColor = vignette(texcoord, finalColor);
 
+    #ifndef HDR_ENABLED
     finalColor += (blueNoiseTemporal(texcoord.st) - 0.5) * (2.0 / 255.0);
 
     texBuffer0 = vec4(clamp(finalColor, vec3(0.0), vec3(1.0)), 1.0);
+    #else
+    // Unclamp for HDR
+    texBuffer0 = vec4(finalColor, 1.0);
+    #endif
 }
 
 /* DRAWBUFFERS:0 */

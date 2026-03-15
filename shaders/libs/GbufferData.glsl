@@ -310,7 +310,7 @@ float getWaterDepth(vec2 coord) {
 }
 
 void packUpGbufferDataSolid(in GbufferData rawData, out vec4 data0, out vec4 data1, out vec4 data2) {
-    // colortex0 RGBA8
+    // colortex0 RGBA16F
     data0 = rawData.albedo;
 
     // colortex1 RGBA16
