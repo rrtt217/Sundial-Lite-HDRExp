@@ -169,7 +169,7 @@ vec3 uchimura(vec3 x) {
     vec3 color = uchimura(x, P, a, m, l, c, b);
 
     #ifdef HDR_ENABLED
-        return color;
+        return pow(color, vec3(1.0 / GAMMA));
     #else
         return pow(color, vec3(1.0 / (2.2 * GAMMA)));
     #endif
@@ -232,7 +232,11 @@ vec3 AgX(vec3 val) {
 
     // Undo input transform
     val = agx_mat_inv * val;
-    val = pow(val, vec3(1.0 / GAMMA));
+    #ifdef HDR_ENABLED
+        val = pow(val, vec3(2.2 / GAMMA));
+    #else
+        val = pow(val, vec3(1.0 / GAMMA));
+    #endif
 
     return val;
 }
@@ -250,8 +254,11 @@ vec3 ACES(vec3 color) {
     color = RRTAndODTFit(color);
     color *= mat3(1.60475, -0.53108, -0.07367, -0.10208, 1.10813, -0.00605, -0.00327, -0.07276, 1.07602);
 
-    color = pow(color, vec3(1.0 / (2.2 * GAMMA)));
-    return color;
+    #ifdef HDR_ENABLED
+        return pow(color, vec3(1.0 / GAMMA));
+    #else
+        return pow(color, vec3(1.0 / (2.2 * GAMMA)));
+    #endif
 }
 
 // https://blog.selfshadow.com/publications/s2025-shading-course/pdi/supplemental/gt7_tone_mapping.cpp
@@ -515,7 +522,11 @@ vec3 AgX_Allenwp(vec3 color) {
 	// Blender's lusRGB.compensate_low_side is too complex for this shader, so
 	// simply return the color, even if it has negative components. These negative
 	// components may be useful for subsequent color adjustments.
-    return color;
+    #ifdef HDR_ENABLED
+        return pow(color, vec3(1.0 / GAMMA));
+    #else
+        return pow(color, vec3(1.0 / (2.2 * GAMMA)));
+    #endif
 }
 
 void main() {
