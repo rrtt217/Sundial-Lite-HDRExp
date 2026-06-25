@@ -130,6 +130,10 @@ void main() {
         #else
             color = FidelityFX_RCAS(colortex0, texcoord, color, pixelSize);
         #endif
+    #else
+        #ifdef HDR_ENABLED
+            color = linearToSRGBSafe(color) * HdrGamePaperWhiteBrightness / HdrUIBrightness;
+        #endif
     #endif
     fragColor = vec4(color, 1.0);
 }
