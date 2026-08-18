@@ -376,14 +376,27 @@ vec3 ucsToRgb(vec3 ictCp) {
 }
 
 vec3 GT7(vec3 color) {
+    #ifdef HDR_ENABLED
+        float paperWhite = HdrGamePaperWhiteBrightness;   // cd/m^2
+        float peakIntensity = HdrGamePeakBrightness;      // cd/m^2
+        float sdrCorrectionFactor = 1.0;
+        float framebufferLuminanceTargetUcs = rgbToUcs(vec3(peakIntensity)).x;
+        vec3 work = color * paperWhite;
+    #else
+        float paperWhite = 1.0;
+        float peakIntensity = 1.0;
+        float sdrCorrectionFactor = 1.0;
+        const float framebufferLuminanceTargetUcs = 0.15;
+        vec3 work = color;
+    #endif
+
     const float alpha_ = 0.25;
     const float k = (GT7_LINEAR_SECTION - 1.0) / (alpha_ - 1.0);
-    const float kA_ = GT7_LINEAR_SECTION + k;
-    const float kB_ = -k * exp(GT7_LINEAR_SECTION / k);
-    const float kC_ = -1.0 / k;
+    float kA_ = peakIntensity * GT7_LINEAR_SECTION + peakIntensity * k;
+    float kB_ = -peakIntensity * k * exp(GT7_LINEAR_SECTION / k);
+    float kC_ = -1.0 / (k * peakIntensity);
 
     const float blendRatio_ = 0.6;
-    const float framebufferLuminanceTargetUcs = 0.15;
 
     // Colorspace transformation source: https://www.colour-science.org:8010/apps/rgb_colourspace_transformation_matrix
     const mat3 Rec2020_2_sRGB = mat3(
@@ -400,15 +413,15 @@ vec3 GT7(vec3 color) {
     color = sRGB_2_Rec2020 * color;
 
     // Convert to UCS to separate luminance and chroma.
-    vec3 ucs = rgbToUcs(color);
+    vec3 ucs = rgbToUcs(work);
 
-    // Per-channel tone mapping ("skewed" color).
-    vec3 weightLinear = smoothstep(vec3(0.0), vec3(GT7_MID_POINT), color);
+    // Per-channel tone mapping ("skewed" color)，参考完整版 evaluateCurve。
+    vec3 weightLinear = smoothstep(vec3(0.0), vec3(GT7_MID_POINT * paperWhite), work);
     vec3 weightToe = 1.0 - weightLinear;
     // Shoulder mapping for highlights.
-    vec3 shoulder = kA_ + kB_ * exp(color * kC_);
-    vec3 toeMapped = GT7_MID_POINT * pow(color / GT7_MID_POINT, vec3(GT7_TOE_STRENGTH));
-    vec3 skewedRgb = mix(shoulder, weightToe * toeMapped + weightLinear * color, lessThan(color, vec3(GT7_LINEAR_SECTION)));
+    vec3 shoulder = kA_ + kB_ * exp(work * kC_);
+    vec3 toeMapped = GT7_MID_POINT * paperWhite * pow(work / (GT7_MID_POINT * paperWhite), vec3(GT7_TOE_STRENGTH));
+    vec3 skewedRgb = mix(shoulder, weightToe * toeMapped + weightLinear * work, lessThan(work, vec3(GT7_LINEAR_SECTION * peakIntensity)));
 
     vec3 skewedUcs = rgbToUcs(skewedRgb);
 
@@ -421,12 +434,19 @@ vec3 GT7(vec3 color) {
 
     // Convert back to RGB.
     vec3 scaledRgb = ucsToRgb(scaledUcs);
-    
+
     vec3 blended = mix(skewedRgb, scaledRgb, blendRatio_);
-    color = clamp(blended, 0.0, 1.0);
+
+    color = sdrCorrectionFactor * min(blended, vec3(peakIntensity)) / paperWhite;
 
     color = Rec2020_2_sRGB * color;
-    color = pow(color, vec3(1.0 / (2.2 * GAMMA)));
+
+    #ifdef HDR_ENABLED
+        return pow(color, vec3(1.0 / GAMMA));
+    #else
+        return pow(color, vec3(1.0 / (2.2 * GAMMA)));
+    #endif
+}
 
 // allenwp tonemapping curve; developed for use in the Godot game engine.
 // Source and details: https://allenwp.com/blog/2025/05/29/allenwp-tonemapping-curve/
