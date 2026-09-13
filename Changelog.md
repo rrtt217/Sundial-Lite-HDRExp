@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 - Added `Texture > Normal > Directional light level` option, provide better lighting with texture normal, but may look strange in certain scene;
 - Added `Texture > Parallax > Smooth parallax offset` option, make smooth parallax matches pixel range, also affect `Parallax based normal`;
 - Added physics ocean v3 compat;
+- Added Distant Horizons' LoD texture support (require Distant Horizons 3.2.1 or above);
 
 ### Changed
 
