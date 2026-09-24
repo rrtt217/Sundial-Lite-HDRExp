@@ -410,12 +410,12 @@ vec3 GT7(vec3 color) {
         0.0433514584, 0.0113614226, 0.8955649727
     );
 
-    color = sRGB_2_Rec2020 * color;
+    work = sRGB_2_Rec2020 * work;
 
     // Convert to UCS to separate luminance and chroma.
     vec3 ucs = rgbToUcs(work);
 
-    // Per-channel tone mapping ("skewed" color)，参考完整版 evaluateCurve。
+    // Per-channel tone mapping ("skewed" color)
     vec3 weightLinear = smoothstep(vec3(0.0), vec3(GT7_MID_POINT * paperWhite), work);
     vec3 weightToe = 1.0 - weightLinear;
     // Shoulder mapping for highlights.
@@ -434,19 +434,19 @@ vec3 GT7(vec3 color) {
 
     // Convert back to RGB.
     vec3 scaledRgb = ucsToRgb(scaledUcs);
-
+    
     vec3 blended = mix(skewedRgb, scaledRgb, blendRatio_);
 
     color = sdrCorrectionFactor * min(blended, vec3(peakIntensity)) / paperWhite;
 
     color = Rec2020_2_sRGB * color;
-
     #ifdef HDR_ENABLED
         return pow(color, vec3(1.0 / GAMMA));
     #else
         return pow(color, vec3(1.0 / (2.2 * GAMMA)));
     #endif
 }
+
 
 // allenwp tonemapping curve; developed for use in the Godot game engine.
 // Source and details: https://allenwp.com/blog/2025/05/29/allenwp-tonemapping-curve/
